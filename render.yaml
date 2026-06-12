@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: barkoggle
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      # Supabase (Cloud-Save + Stripe-Entitlements)
+      - key: SUPABASE_URL
+        value: https://nyxeykvltmtzubdsfrab.supabase.co
+      - key: SUPABASE_SERVICE_KEY
+        sync: false          # Supabase Dashboard -> Project Settings -> API -> service_role (secret)
+      # Stripe (Test-Modus)
+      - key: STRIPE_SECRET_KEY
+        sync: false          # Stripe Dashboard (Test) -> Developers -> API keys -> Secret key (sk_test_...)
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false          # Stripe -> Developers -> Webhooks -> dein Endpoint -> Signing secret (whsec_...)
+      # Admin-Report-Seite
+      - key: ADMIN_KEY
+        sync: false          # frei waehlbares Passwort fuer /admin/reports?key=...
+      # Optional: erst NACH dem 1. Deploy setzen (deine Render-URL), sonst leer lassen
+      - key: PUBLIC_URL
+        sync: false
