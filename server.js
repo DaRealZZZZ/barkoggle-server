@@ -108,6 +108,19 @@ const codes = {};     // CODE -> hostSocketId
 let nextRoom = 1;
 const reports = [];   // in-memory ring buffer
 
+// ---------- Friends / presence ----------
+// online[deviceId] = { sid, nick, coat, elo } for currently connected players
+const online = {};
+function onlineInfo(devId){ const o = online[devId]; if(!o) return null; const s = io.sockets.sockets.get(o.sid); if(!s||!s.connected){ delete online[devId]; return null; } return o; }
+function pushFriends(devId){ // tell a player the live status of friends they asked about
+  const o = online[devId]; if(!o) return; const s = io.sockets.sockets.get(o.sid); if(!s) return;
+  const list = (s.data.friends||[]).map(f=>{ const fo = onlineInfo(f.id); return { id:f.id, nick: fo?fo.nick:f.nick, coat: fo?fo.coat:f.coat, elo: fo?fo.elo:(f.elo||1000), online: !!fo }; });
+  s.emit('friendStatus', list);
+}
+function notifyFriendsOfMe(devId){ // when I come online/offline, refresh anyone who has me as friend
+  for(const did in online){ const s = io.sockets.sockets.get(online[did].sid); if(s && (s.data.friends||[]).some(f=>f.id===devId)) pushFriends(did); }
+}
+
 function broadcastCount() { io.emit('players', io.engine.clientsCount); }
 function genCode() { let c; do { c = Math.random().toString(36).slice(2, 7).toUpperCase(); } while (codes[c]); return c; }
 function cleanupQueue(s) { for (const k in queues) { queues[k] = queues[k].filter(x => x && x.id !== s.id && x.connected); if (!queues[k].length) delete queues[k]; } }
@@ -118,15 +131,19 @@ function pair(a, b, friends) {
   a.data.room = room; b.data.room = room;
   a.join(room); b.join(room);
   const mode = a.data.mode || 'cam';
-  a.emit('matched', { room, friends, mode, initiator: true, oppNick: b.data.nick, oppCoat: b.data.coat });
-  b.emit('matched', { room, friends, mode, initiator: false, oppNick: a.data.nick, oppCoat: a.data.coat });
+  a.emit('matched', { room, friends, mode, initiator: true, oppNick: b.data.nick, oppCoat: b.data.coat, oppId: b.data.devId || '', oppElo: b.data.elo || 1000 });
+  b.emit('matched', { room, friends, mode, initiator: false, oppNick: a.data.nick, oppCoat: a.data.coat, oppId: a.data.devId || '', oppElo: a.data.elo || 1000 });
 }
 function leaveRoom(s) {
   const room = s.data && s.data.room;
   if (room && rooms[room]) { s.to(room).emit('oppLeft'); delete rooms[room]; }
   if (s.data) s.data.room = null;
 }
-function ident(s, d) { s.data.nick = String((d && d.nick) || 'Dog').slice(0, 14); s.data.coat = (d && d.coat) || 'gray'; s.data.mode = (d && d.mode) || 'cam'; }
+function ident(s, d) { s.data.nick = String((d && d.nick) || 'Dog').slice(0, 14); s.data.coat = (d && d.coat) || 'gray'; s.data.mode = (d && d.mode) || 'cam';
+  if (d && d.devId) { s.data.devId = String(d.devId).slice(0,64); s.data.elo = (d && d.elo) || 1000;
+    online[s.data.devId] = { sid: s.id, nick: s.data.nick, coat: s.data.coat, elo: s.data.elo };
+  }
+  if (d && Array.isArray(d.friends)) s.data.friends = d.friends.slice(0,100); }
 
 io.on('connection', socket => {
   broadcastCount();
@@ -193,8 +210,54 @@ io.on('connection', socket => {
     else socket.emit('adminFail');
   });
 
+  // ---------- presence + friends ----------
+  socket.on('hello', d => { ident(socket, d); if (socket.data.devId) { notifyFriendsOfMe(socket.data.devId); pushFriends(socket.data.devId); } });
+  socket.on('refreshFriends', d => { if (d && Array.isArray(d.friends)) socket.data.friends = d.friends.slice(0,100); if (socket.data.devId) pushFriends(socket.data.devId); });
+
+  // send a friend request to a player by their code (their device shares a short friend-code = first 5 of devId hash, but we use the live room code OR an explicit add-by-id)
+  socket.on('friendReq', d => {
+    d = d || {}; const targetId = String(d.toId||''); const to = onlineInfo(targetId);
+    if (!to) { socket.emit('friendReqResult', { ok:false, reason:'offline' }); return; }
+    const ts = io.sockets.sockets.get(to.sid); if (!ts) { socket.emit('friendReqResult', { ok:false, reason:'offline' }); return; }
+    ts.emit('friendReq', { fromId: socket.data.devId, fromNick: socket.data.nick, fromCoat: socket.data.coat, fromElo: socket.data.elo||1000 });
+    socket.emit('friendReqResult', { ok:true });
+  });
+  // accept -> both add each other (client persists); server just relays acceptance
+  socket.on('friendAccept', d => {
+    d = d || {}; const otherId = String(d.toId||''); const oo = onlineInfo(otherId); if(!oo) return;
+    const os = io.sockets.sockets.get(oo.sid); if(!os) return;
+    os.emit('friendAdded', { id: socket.data.devId, nick: socket.data.nick, coat: socket.data.coat, elo: socket.data.elo||1000 });
+    socket.emit('friendAdded', { id: otherId, nick: oo.nick, coat: oo.coat, elo: oo.elo||1000 });
+  });
+
+  // challenge a friend directly -> opens a private room, sends invite to friend
+  socket.on('challenge', d => {
+    d = d || {}; const targetId = String(d.toId||''); const to = onlineInfo(targetId);
+    if (!to) { socket.emit('challengeResult', { ok:false, reason:'offline' }); return; }
+    const ts = io.sockets.sockets.get(to.sid); if (!ts || !ts.connected) { socket.emit('challengeResult', { ok:false, reason:'offline' }); return; }
+    socket.data.mode = (d.mode && String(d.mode)) || socket.data.mode || 'cam';
+    const code = genCode(); codes[code] = socket.id; socket.data.code = code;
+    ts.emit('challengeIn', { fromId: socket.data.devId, fromNick: socket.data.nick, fromCoat: socket.data.coat, mode: socket.data.mode, code });
+    socket.emit('challengeResult', { ok:true, code });
+  });
+  socket.on('challengeDecline', d => {
+    d = d || {}; const otherId = String(d.toId||''); const oo = onlineInfo(otherId); if(!oo) return;
+    const os = io.sockets.sockets.get(oo.sid); if(os) os.emit('challengeDeclined', { byNick: socket.data.nick });
+  });
+
+  socket.on('friendReqByCode', d => {
+    d = d || {}; const code = String(d.code||'').toUpperCase().trim(); if (code.length < 4) return;
+    // friend-code = last 5 chars of devId (alphanumeric, uppercased)
+    let targetId = null;
+    for (const did in online) { const sc = did.replace(/[^a-zA-Z0-9]/g,'').slice(-5).toUpperCase(); if (sc === code && did !== socket.data.devId) { targetId = did; break; } }
+    if (!targetId) { socket.emit('friendReqResult', { ok:false, reason:'offline' }); return; }
+    const to = onlineInfo(targetId); const ts = to && io.sockets.sockets.get(to.sid);
+    if (!ts) { socket.emit('friendReqResult', { ok:false, reason:'offline' }); return; }
+    ts.emit('friendReq', { fromId: socket.data.devId, fromNick: socket.data.nick, fromCoat: socket.data.coat, fromElo: socket.data.elo||1000 });
+    socket.emit('friendReqResult', { ok:true });
+  });
   socket.on('leave', () => { leaveRoom(socket); cleanupQueue(socket); cleanupCodes(socket); });
-  socket.on('disconnect', () => { leaveRoom(socket); cleanupQueue(socket); cleanupCodes(socket); broadcastCount(); });
+  socket.on('disconnect', () => { const dev = socket.data.devId; leaveRoom(socket); cleanupQueue(socket); cleanupCodes(socket); if (dev && online[dev] && online[dev].sid === socket.id) { delete online[dev]; notifyFriendsOfMe(dev); } broadcastCount(); });
 });
 
 const PORT = process.env.PORT || 3000;

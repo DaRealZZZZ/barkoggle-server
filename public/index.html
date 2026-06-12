@@ -422,6 +422,24 @@ button:focus-visible,.mode:focus-visible,.type:focus-visible{outline:3px solid v
 .toast{border:2.5px solid var(--ink);}
 .res-title.win{animation:resPop .5s cubic-bezier(.3,1.6,.5,1);}
 @keyframes resPop{0%{transform:scale(.4) rotate(-6deg);opacity:0}100%{transform:scale(1) rotate(0);opacity:1}}
+/* ---- friends ---- */
+.fr-row{display:flex;align-items:center;gap:10px;padding:9px 10px;border:2px solid var(--ink);border-radius:14px;background:#fff;margin-bottom:8px;box-shadow:0 3px 0 rgba(36,19,38,.12);}
+.fr-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;border:1.5px solid var(--ink);}
+.fr-on{background:#46d36b;}.fr-off{background:#c9c4cc;}
+.fr-av{width:34px;height:34px;border-radius:10px;flex-shrink:0;overflow:hidden;border:2px solid var(--ink);background:var(--paper-2);}
+.fr-av svg{width:100%;height:100%;}
+.fr-meta{flex:1;min-width:0;}
+.fr-nm{font-weight:600;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.fr-sub{font-size:11px;color:var(--muted);}
+.fr-ch{flex-shrink:0;padding:7px 12px;border:2px solid var(--ink);border-radius:11px;background:var(--orange);color:#fff;font-weight:700;font-size:12px;cursor:pointer;box-shadow:0 3px 0 rgba(36,19,38,.18);font-family:'Fredoka',sans-serif;}
+.fr-ch:disabled{background:#c9c4cc;cursor:default;box-shadow:0 3px 0 rgba(36,19,38,.1);}
+.fr-empty{text-align:center;color:var(--muted);font-size:13px;padding:18px 6px;line-height:1.6;}
+.fr-tabs{display:flex;gap:8px;margin-bottom:12px;}
+.fr-tab{flex:1;padding:9px;border:2px solid var(--ink);border-radius:12px;background:#fff;font-weight:600;font-size:13px;cursor:pointer;font-family:'Fredoka',sans-serif;box-shadow:0 3px 0 rgba(36,19,38,.12);}
+.fr-tab.on{background:var(--ink);color:#fff;}
+.fr-badge{position:absolute;top:-4px;right:-4px;min-width:18px;height:18px;padding:0 4px;border-radius:9px;background:var(--pink);color:#fff;font-size:11px;font-weight:700;display:none;align-items:center;justify-content:center;border:2px solid #fff;}
+.fr-mycode{display:flex;align-items:center;gap:8px;background:var(--paper-2);border:2px dashed var(--ink);border-radius:12px;padding:10px;margin-bottom:12px;}
+.fr-mycode b{font-family:'Lilita One',cursive;letter-spacing:.12em;font-size:18px;color:var(--ink);}
 </style>
 </head>
 <body>
@@ -512,6 +530,7 @@ button:focus-visible,.mode:focus-visible,.type:focus-visible{outline:3px solid v
           </div>
           <button class="btn play" id="play-btn"><svg class="ic"><use href="#ic-paw"/></svg><span data-t="menu.play">MATCH SUCHEN</span></button>
           <button class="btn type" id="friends-btn" style="width:100%;margin-top:10px"><svg class="ic"><use href="#ic-flag"/></svg><span data-t="menu.friends" id="friends-btn-t">Gegen Freunde (Code)</span></button>
+          <button class="btn type" id="friendlist-btn" style="width:100%;margin-top:8px;position:relative"><svg class="ic"><use href="#ic-paw"/></svg><span id="friendlist-btn-t">Freundesliste</span><span class="fr-badge" id="fr-menu-badge" style="top:8px;right:10px">0</span></button>
         </div>
         <div class="ticker"><div class="ticker-track" id="ticker"></div></div>
         <div id="adbar" style="margin-top:14px;background:#fff;border:2px dashed var(--muted);border-radius:14px;padding:12px;display:flex;align-items:center;justify-content:space-between;gap:10px;color:var(--muted);font-size:13px"><span><b style="color:var(--ink)">Werbung</b> · Kein Bock auf Werbung? Hol dir <b style="color:var(--orange)">VIP</b>.</span><button class="btn" id="adbar-go" style="background:var(--orange);color:#fff;font-family:'Lilita One',cursive;font-size:13px;padding:7px 12px;border-radius:10px;box-shadow:0 3px 0 var(--orange-d)">SHOP</button></div>
@@ -655,6 +674,7 @@ button:focus-visible,.mode:focus-visible,.type:focus-visible{outline:3px solid v
     <div class="res-btns">
       <button class="btn btn-rematch" id="res-rematch"><svg class="ic"><use href="#ic-paw"/></svg><span data-t="res.again">NOCHMAL</span></button>
       <button class="btn btn-home" id="res-home" data-t="res.home">Zurück zum Menü</button>
+    <button class="btn modal-btn" id="res-addfriend" style="display:none;max-width:320px;margin:8px auto 0;background:var(--paper-2);color:var(--ink);border:2px solid var(--ink)"><svg class="ic"><use href="#ic-paw"/></svg> <span id="res-addfriend-t">Als Freund hinzufügen</span></button>
     </div>
   </div>
 </section>
@@ -712,6 +732,31 @@ button:focus-visible,.mode:focus-visible,.type:focus-visible{outline:3px solid v
   </div>
 </div></div>
 
+<div class="overlay" id="ov-friends"><div class="modal">
+  <div class="modal-h"><h3 id="fr-title">Freunde</h3><div class="x" data-close="ov-friends"><svg class="ic"><use href="#ic-x"/></svg></div></div>
+  <div class="fr-mycode"><div style="flex:1"><div style="font-size:11px;color:var(--muted)" id="fr-mycode-lbl">Dein Freundescode</div><b id="fr-mycode">—</b></div><button class="btn modal-btn ghost" id="fr-mycode-copy" style="width:auto;margin:0;padding:8px 12px"><svg class="ic"><use href="#ic-paw"/></svg></button></div>
+  <div class="fr-tabs">
+    <button class="fr-tab on" id="fr-tab-list">Liste</button>
+    <button class="fr-tab" id="fr-tab-add" style="position:relative">Hinzufügen<span class="fr-badge" id="fr-add-badge">0</span></button>
+  </div>
+  <div id="fr-list-view"><div id="fr-list"></div></div>
+  <div id="fr-add-view" style="display:none">
+    <p style="color:var(--muted);font-size:13px;margin-bottom:8px" id="fr-add-lbl">Freundescode des anderen eingeben:</p>
+    <div class="code-in"><input id="fr-add-input" maxlength="5" placeholder="CODE" autocomplete="off"></div>
+    <button class="btn modal-btn" id="fr-add-btn" style="margin-top:8px"><svg class="ic"><use href="#ic-paw"/></svg> <span id="fr-add-send">Anfrage senden</span></button>
+    <div id="fr-reqs" style="margin-top:14px"></div>
+  </div>
+</div></div>
+
+<div class="overlay" id="ov-chal"><div class="modal" style="text-align:center">
+  <div class="modal-h" style="justify-content:center"><h3 id="chal-title">Herausforderung!</h3></div>
+  <div class="fr-av" id="chal-av" style="width:64px;height:64px;margin:0 auto 10px"></div>
+  <p id="chal-body" style="font-size:15px;margin-bottom:4px"></p>
+  <p id="chal-mode" style="color:var(--muted);font-size:13px;margin-bottom:14px"></p>
+  <button class="btn modal-btn" id="chal-accept"><svg class="ic"><use href="#ic-check"/></svg> <span id="chal-accept-t">Annehmen</span></button>
+  <button class="btn modal-btn ghost" id="chal-decline"><span id="chal-decline-t">Ablehnen</span></button>
+</div></div>
+
 <!-- ============ SHOP ============ -->
 <div class="overlay" id="ov-shop"><div class="modal">
   <div class="modal-h"><h3 id="shop-title">Shop</h3><div class="x" data-close="ov-shop"><svg class="ic"><use href="#ic-x"/></svg></div></div>
@@ -733,7 +778,7 @@ button:focus-visible,.mode:focus-visible,.type:focus-visible{outline:3px solid v
 /* ============ NET (multiplayer, graceful fallback to bot) ============ */
 const NET={sock:null,connected:false,live:false,room:null,last:-1,players:0,
 init(){if(typeof io==='undefined')return;try{this.sock=io({reconnection:true,timeout:5000});const s=this.sock;
-s.on('connect',()=>{this.connected=true;});
+s.on('connect',()=>{this.connected=true;this.hello();});
 s.on('disconnect',()=>{this.connected=false;if(this.live)this.onOppLeft();});
 s.on('connect_error',()=>{this.connected=false;});
 s.on('players',n=>{this.players=Number(n)||0;const el=document.getElementById('hero-online');if(el)el.textContent=this.players.toLocaleString();});
@@ -743,13 +788,26 @@ s.on('oppLeft',()=>this.onOppLeft());
 s.on('signal',d=>{if(typeof onSignal==='function')onSignal(d);});
 s.on('roomCode',d=>{if(typeof showRoomCode==='function')showRoomCode(d.code);});
 s.on('joinFail',()=>{if(typeof onJoinFail==='function')onJoinFail();});
+s.on('friendStatus',list=>{if(typeof onFriendStatus==='function')onFriendStatus(list);});
+s.on('friendReq',d=>{if(typeof onFriendReq==='function')onFriendReq(d);});
+s.on('friendReqResult',d=>{if(typeof onFriendReqResult==='function')onFriendReqResult(d);});
+s.on('friendAdded',d=>{if(typeof onFriendAdded==='function')onFriendAdded(d);});
+s.on('challengeIn',d=>{if(typeof onChallengeIn==='function')onChallengeIn(d);});
+s.on('challengeResult',d=>{if(typeof onChallengeResult==='function')onChallengeResult(d);});
+s.on('challengeDeclined',d=>{if(typeof onChallengeDeclined==='function')onChallengeDeclined(d);});
 }catch(e){this.connected=false;}},
-find(mode,type){if(!this.connected)return false;this.live=false;this.room=null;this.last=-1;this.sock.emit('queue',{mode,type,nick:P.nick,coat:P.coat});return true;},
-createRoom(mode){if(!this.connected)return false;this.live=false;this.room=null;this.last=-1;this.sock.emit('createRoom',{mode,nick:P.nick,coat:P.coat});return true;},
-joinRoom(code,mode){if(!this.connected)return false;this.live=false;this.room=null;this.last=-1;this.sock.emit('joinRoom',{code,mode,nick:P.nick,coat:P.coat});return true;},
+find(mode,type){if(!this.connected)return false;this.live=false;this.room=null;this.last=-1;this.sock.emit('queue',{mode,type,nick:P.nick,coat:P.coat,devId:DID||'',elo:overallElo()});return true;},
+createRoom(mode){if(!this.connected)return false;this.live=false;this.room=null;this.last=-1;this.sock.emit('createRoom',{mode,nick:P.nick,coat:P.coat,devId:DID||'',elo:overallElo()});return true;},
+joinRoom(code,mode){if(!this.connected)return false;this.live=false;this.room=null;this.last=-1;this.sock.emit('joinRoom',{code,mode,nick:P.nick,coat:P.coat,devId:DID||'',elo:overallElo()});return true;},
+hello(){if(!this.connected)return;this.sock.emit('hello',{nick:P.nick,coat:P.coat,devId:DID||'',elo:overallElo(),friends:(P.friends||[]).map(f=>({id:f.id,nick:f.nick,coat:f.coat,elo:f.elo}))});},
+refreshFriends(){if(this.connected)this.sock.emit('refreshFriends',{friends:(P.friends||[]).map(f=>({id:f.id,nick:f.nick,coat:f.coat,elo:f.elo}))});},
+friendReq(toId){if(this.connected)this.sock.emit('friendReq',{toId});},
+friendAccept(toId){if(this.connected)this.sock.emit('friendAccept',{toId});},
+challenge(toId,mode){if(this.connected)this.sock.emit('challenge',{toId,mode});},
+challengeDecline(toId){if(this.connected)this.sock.emit('challengeDecline',{toId});},
 report(d){if(this.connected)this.sock.emit('report',d);},
 signal(data){if(this.connected&&this.room)this.sock.emit('signal',{room:this.room,data});},
-onMatched(d){clearTimeout(window._netFallback);this.live=true;this.room=d.room;window._friendRoom=!!d.friends;window._initiator=!!d.initiator;_pendingSignals=[];if(d.mode&&MODES[d.mode])selMode=d.mode;oppName=d.oppNick||'Rival';oppCoat=COATS[d.oppCoat]?d.oppCoat:'gray';if(typeof closeOverlay==='function')closeOverlay('ov-code');if(!document.getElementById('screen-match').classList.contains('active')){setupMatchVisuals();go('match');}revealOpp(oppName,oppCoat);setTimeout(()=>beginGame(),850);},
+onMatched(d){clearTimeout(window._netFallback);this.live=true;this.room=d.room;window._friendRoom=!!d.friends;window._initiator=!!d.initiator;window._oppId=d.oppId||'';window._oppElo=d.oppElo||1000;_pendingSignals=[];if(d.mode&&MODES[d.mode])selMode=d.mode;oppName=d.oppNick||'Rival';oppCoat=COATS[d.oppCoat]?d.oppCoat:'gray';if(typeof closeOverlay==='function')closeOverlay('ov-code');if(!document.getElementById('screen-match').classList.contains('active')){setupMatchVisuals();go('match');}revealOpp(oppName,oppCoat);setTimeout(()=>beginGame(),850);},
 score(n){if(!this.live||!this.connected||n===this.last)return;this.last=n;this.sock.emit('score',{room:this.room,n});},
 onScore(n){if(!running)return;if(n>oppScore){bark(document.getElementById('dog-opp'));if(!MODES[selMode].hideOpp)bark(document.getElementById('cam-opp-dog'));showBubble('bub-opp');spawnRing('fighter-opp');}oppScore=n;updateScore();},
 onOppLeft(){if(this.live&&running){window._forceWin=true;toast(LANG==='de'?'Gegner hat verlassen – du gewinnst!':'Rival left – you win!','ic-check');setTimeout(()=>{if(running)endGame();},700);}this.live=false;},
@@ -813,7 +871,7 @@ count(){this.tone(440,.18,'square',.3);},go(){this.tone(880,.4,'square',.34);}};
 </script>
 <script>
 /* ============ STATE ============ */
-const DEF={nick:'',mail:'',coat:'shiba',rating:1000,xp:0,wins:0,losses:0,streak:0,vip:false,noads:false,bones:0,unlocks:[],elo:{cam:1000,audio:1000,blind:1000,blitz:1000,marathon:1000,chaos:1000}};
+const DEF={nick:'',mail:'',coat:'shiba',rating:1000,xp:0,wins:0,losses:0,streak:0,best:0,vip:false,noads:false,bones:0,unlocks:[],friends:[],elo:{cam:1000,audio:1000,blind:1000,blitz:1000,marathon:1000,chaos:1000}};
 let P=Object.assign({},DEF,Store.get('barkoggle_profile',{}));
 P.elo=Object.assign({},(P.elo&&typeof P.elo==='object')?P.elo:{});
 ['cam','audio','blind','blitz','marathon','chaos'].forEach(m=>{if(P.elo[m]==null)P.elo[m]=P.rating||1000;});
@@ -1093,7 +1151,90 @@ function armCodeTimeout(){clearTimeout(window._roomCodeT);window._roomCodeT=setT
 function onJoinFail(){toast(LANG==='de'?'Code nicht gefunden oder abgelaufen':'Code not found or expired','ic-flag');}
 function doJoinRoom(){ensureMic(_doJoinRoom);}
 function _doJoinRoom(){const code=document.getElementById('code-input').value.toUpperCase().trim();if(code.length<4){toast(LANG==='de'?'Code eingeben':'Enter a code','ic-flag');return;}if(!NET.connected){toast(LANG==='de'?'Kein Server verbunden':'No server connected','ic-flag');return;}NET.joinRoom(code,selMode);}
-function onJoinFail(){toast(LANG==='de'?'Code nicht gefunden':'Code not found','ic-flag');}
+
+/* ============ FRIENDS SYSTEM ============ */
+let _frStatus={};      // id -> {online,nick,coat,elo}
+let _frReqs=[];        // pending incoming friend requests [{fromId,fromNick,fromCoat,fromElo}]
+let _frChalQueue=[];   // pending incoming challenges
+function shortCode(id){return (id||'').replace(/[^a-zA-Z0-9]/g,'').slice(-5).toUpperCase();}  // friend-code = last 5 of device id
+function myFriendCode(){return DID?shortCode(DID):'—';}
+function findFriend(id){return (P.friends||[]).find(f=>f.id===id);}
+function frL(de,en){return LANG==='de'?de:en;}
+
+function openFriends(){const de=LANG==='de';
+document.getElementById('fr-title').textContent=de?'Freunde':'Friends';
+document.getElementById('fr-mycode-lbl').textContent=de?'Dein Freundescode':'Your friend code';
+document.getElementById('fr-mycode').textContent=myFriendCode();
+document.getElementById('fr-tab-list').textContent=de?'Liste':'List';
+document.getElementById('fr-tab-add').firstChild.textContent=de?'Hinzufügen':'Add';
+document.getElementById('fr-add-lbl').textContent=de?'Freundescode des anderen eingeben:':"Enter the other player's friend code:";
+document.getElementById('fr-add-send').textContent=de?'Anfrage senden':'Send request';
+frTab('list');NET.refreshFriends();renderFriends();openOverlay('ov-friends');}
+
+function frTab(which){const list=which==='list';document.getElementById('fr-list-view').style.display=list?'':'none';document.getElementById('fr-add-view').style.display=list?'none':'';document.getElementById('fr-tab-list').classList.toggle('on',list);document.getElementById('fr-tab-add').classList.toggle('on',!list);if(!list)renderReqs();}
+
+function renderFriends(){const box=document.getElementById('fr-list');const de=LANG==='de';const fr=P.friends||[];
+if(!fr.length){box.innerHTML='<div class="fr-empty">'+(de?'Noch keine Freunde.<br>Füge Freunde über ihren Freundescode hinzu oder nach einem Match.':'No friends yet.<br>Add friends via their code or after a match.')+'</div>';updateFrBadges();return;}
+// online first, then by elo
+const sorted=fr.slice().sort((a,b)=>{const ao=_frStatus[a.id]&&_frStatus[a.id].online?1:0;const bo=_frStatus[b.id]&&_frStatus[b.id].online?1:0;if(ao!==bo)return bo-ao;return (b.elo||0)-(a.elo||0);});
+box.innerHTML='';
+sorted.forEach(f=>{const st=_frStatus[f.id]||{};const on=!!st.online;const nick=st.nick||f.nick;const coat=st.coat||f.coat;const elo=st.elo||f.elo||1000;
+const row=document.createElement('div');row.className='fr-row';
+row.innerHTML='<span class="fr-dot '+(on?'fr-on':'fr-off')+'"></span><div class="fr-av">'+dogInner(coat)+'</div><div class="fr-meta"><div class="fr-nm">'+esc(nick)+'</div><div class="fr-sub">'+(on?frL('Online · ','Online · ')+'ELO '+elo:frL('Offline · ','Offline · ')+'ELO '+elo)+'</div></div>';
+const btn=document.createElement('button');btn.className='fr-ch';btn.textContent=frL('Fordern','Battle');btn.disabled=!on;btn.onclick=()=>challengeFriend(f.id);
+if(!on)btn.title=frL('Offline','Offline');
+row.appendChild(btn);box.appendChild(row);});
+updateFrBadges();}
+
+function esc(s){return String(s||'').replace(/[<>&]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]));}
+
+function renderReqs(){const box=document.getElementById('fr-reqs');const de=LANG==='de';
+if(!_frReqs.length){box.innerHTML='';updateFrBadges();return;}
+box.innerHTML='<p style="font-size:13px;font-weight:600;margin-bottom:8px">'+(de?'Anfragen':'Requests')+'</p>';
+_frReqs.forEach(rq=>{const row=document.createElement('div');row.className='fr-row';
+row.innerHTML='<div class="fr-av">'+dogInner(rq.fromCoat||'gray')+'</div><div class="fr-meta"><div class="fr-nm">'+esc(rq.fromNick)+'</div><div class="fr-sub">'+(de?'möchte dich hinzufügen':'wants to add you')+'</div></div>';
+const ok=document.createElement('button');ok.className='fr-ch';ok.textContent=de?'OK':'OK';ok.onclick=()=>acceptReq(rq);
+row.appendChild(ok);box.appendChild(row);});
+updateFrBadges();}
+
+function updateFrBadges(){const n=_frReqs.length;['fr-add-badge','fr-menu-badge'].forEach(id=>{const b=document.getElementById(id);if(b){b.textContent=n;b.style.display=n>0?'flex':'none';}});}
+
+function addFriendLocal(f){if(!f||!f.id)return;P.friends=P.friends||[];if(!P.friends.some(x=>x.id===f.id)){P.friends.push({id:f.id,nick:f.nick,coat:f.coat||'gray',elo:f.elo||1000});Store.set('barkoggle_profile',P);NET.refreshFriends();}}
+
+/* sending a request by code: we can only resolve a full device-id from the live match or an exact code match.
+   Friend-code = last 5 chars of device id. The server matches by exact device id, so we ask the server to
+   resolve the short code among online players. Simpler + robust: request by short code via a tiny resolve. */
+function sendFriendReqByCode(){const de=LANG==='de';const code=document.getElementById('fr-add-input').value.toUpperCase().trim();if(code.length<4){toast(de?'Code eingeben':'Enter a code','ic-flag');return;}if(!NET.connected){toast(de?'Nur online möglich':'Online only','ic-flag');return;}
+// we send the short code; server resolves against online devIds
+NET.sock.emit('friendReqByCode',{code});document.getElementById('fr-add-input').value='';toast(de?'Anfrage gesendet (wenn online)':'Request sent (if online)','ic-check');}
+
+function challengeFriend(id){const de=LANG==='de';if(!NET.connected){toast(de?'Nur online':'Online only','ic-flag');return;}
+ensureMic(()=>{NET.challenge(id,selMode);toast(de?'Herausforderung gesendet…':'Challenge sent…','ic-flag');});}
+
+function acceptReq(rq){NET.friendAccept(rq.fromId);addFriendLocal({id:rq.fromId,nick:rq.fromNick,coat:rq.fromCoat,elo:rq.fromElo});_frReqs=_frReqs.filter(r=>r.fromId!==rq.fromId);renderReqs();renderFriends();toast(frL('Freund hinzugefügt!','Friend added!'),'ic-check');}
+
+/* ---- incoming events ---- */
+function onFriendStatus(list){(list||[]).forEach(f=>{_frStatus[f.id]={online:f.online,nick:f.nick,coat:f.coat,elo:f.elo};const lf=findFriend(f.id);if(lf){lf.nick=f.nick||lf.nick;lf.coat=f.coat||lf.coat;lf.elo=f.elo||lf.elo;}});if(document.getElementById('ov-friends').classList.contains('open'))renderFriends();updateFrBadges();}
+function onFriendReq(d){if(!_frReqs.some(r=>r.fromId===d.fromId))_frReqs.push(d);if(document.getElementById('ov-friends').classList.contains('open'))renderReqs();updateFrBadges();toast(frL((d.fromNick||'Jemand')+' will dich adden','Friend request from '+(d.fromNick||'someone')),'ic-paw');}
+function onFriendReqResult(d){if(d&&!d.ok)toast(frL('Spieler offline/nicht gefunden','Player offline/not found'),'ic-flag');}
+function onFriendAdded(d){addFriendLocal(d);if(document.getElementById('ov-friends').classList.contains('open'))renderFriends();}
+function onChallengeIn(d){_frChalQueue.push(d);if(!document.getElementById('ov-chal').classList.contains('open'))showNextChallenge();}
+function onChallengeResult(d){if(d&&!d.ok)toast(frL('Freund offline','Friend offline'),'ic-flag');else if(d&&d.ok)toast(frL('Warte auf Annahme…','Waiting for accept…'),'ic-flag');}
+function onChallengeDeclined(d){toast(frL((d&&d.byNick||'Freund')+' hat abgelehnt','Challenge declined'),'ic-flag');}
+
+function showNextChallenge(){const d=_frChalQueue.shift();if(!d)return;window._chalFrom=d;const de=LANG==='de';
+document.getElementById('chal-title').textContent=de?'Herausforderung!':'Challenge!';
+document.getElementById('chal-av').innerHTML=dogInner(d.fromCoat||'gray');
+document.getElementById('chal-body').innerHTML='<b>'+esc(d.fromNick)+'</b> '+(de?'fordert dich heraus!':'challenges you!');
+document.getElementById('chal-mode').textContent=(de?'Modus: ':'Mode: ')+(t('mode.'+d.mode)||d.mode);
+document.getElementById('chal-accept-t').textContent=de?'Annehmen':'Accept';
+document.getElementById('chal-decline-t').textContent=de?'Ablehnen':'Decline';
+openOverlay('ov-chal');SFX.beep&&SFX.beep();}
+
+function acceptChallenge(){const d=window._chalFrom;if(!d)return;closeOverlay('ov-chal');selMode=MODES[d.mode]?d.mode:selMode;ensureMic(()=>{NET.joinRoom(d.code,selMode);});}
+function declineChallenge(){const d=window._chalFrom;if(d)NET.challengeDecline(d.fromId);closeOverlay('ov-chal');setTimeout(showNextChallenge,300);}
+
+function onJoinFailX(){}
 
 /* ============ SHOP ============ */
 const SHOP=[{id:'noads',ic:'ic-bolt',col:'#46B6E0',price:'\u20ac2,99',name:{de:'Werbefrei',en:'Remove Ads'},desc:{de:'Entfernt das Werbebanner f\u00fcr immer.',en:'Removes the ad banner forever.'}},{id:'vip',ic:'ic-crown',col:'linear-gradient(135deg,#FFC23C,#FF6A1A)',price:'\u20ac4,99',name:{de:'VIP',en:'VIP'},desc:{de:'Werbefrei + goldenes VIP-Abzeichen + Gold-Fell + 2\u00d7 XP.',en:'No ads + golden VIP badge + gold coat + 2\u00d7 XP.'}},{id:'supporter',ic:'ic-heart',col:'#FF4D7E',price:'\u20ac9,99',name:{de:'Mega-Supporter',en:'Mega Supporter'},desc:{de:'Alles aus VIP + du unterst\u00fctzt die Entwicklung.',en:'Everything in VIP + you support the dev.'}}];
@@ -1189,6 +1330,9 @@ setTimeout(()=>{document.getElementById('res-xpbar').style.width=(LXP(P)/200*100
 const lvlUp=LEVEL(P)>beforeLvl;
 document.getElementById('res-xp-txt').textContent=lvlUp?(LANG==='de'?'LEVEL UP! → Level '+LEVEL(P):'LEVEL UP! → Level '+LEVEL(P)):(t('menu.level')+' '+LEVEL(P)+' · '+LXP(P)+'/200');
 document.querySelectorAll('.screen').forEach(s=>{if(s.id!=='screen-result')s.classList.remove('active');});
+// post-match: offer to add the rival as a friend (only real online opponents, not bots, not already friends)
+var af=document.getElementById('res-addfriend');
+if(af){var oid=window._oppId;if(NET&&oppName&&oid&&!findFriend(oid)){af.style.display='';document.getElementById('res-addfriend-t').textContent=LANG==='de'?('+ '+oppName+' als Freund'):('+ Add '+oppName);af.onclick=function(){NET.friendReq(oid);addFriendLocal({id:oid,nick:oppName,coat:oppCoat,elo:window._oppElo||1000});af.style.display='none';toast(LANG==='de'?'Freund hinzugefügt!':'Friend added!','ic-check');};}else{af.style.display='none';}}
 if(win){SFX.fanfare();setTimeout(()=>SFX.cheer(),200);burstConfetti(60);
 if(window._newRecord){const R={de:'Neuer Rekord: '+P.best+' Siege in Folge!',en:'New record: '+P.best+' wins in a row!',es:'¡Récord: '+P.best+' victorias seguidas!',fr:'Record : '+P.best+' victoires de suite !',tr:'Rekor: Üst üste '+P.best+' galibiyet!'};setTimeout(()=>toast(R[LANG]||R.en,'ic-flame'),900);window._newRecord=false;}
 }else{SFX.sad();}
@@ -1240,6 +1384,14 @@ document.getElementById('lnk-priv').onclick=()=>openLegal('priv');
 document.getElementById('shop-btn').onclick=openShop;
 document.getElementById('adbar-go').onclick=openShop;
 document.getElementById('friends-btn').onclick=openCode;
+document.getElementById('friendlist-btn').onclick=openFriends;
+document.getElementById('fr-tab-list').onclick=()=>frTab('list');
+document.getElementById('fr-tab-add').onclick=()=>frTab('add');
+document.getElementById('fr-add-btn').onclick=sendFriendReqByCode;
+document.getElementById('fr-add-input').addEventListener('keydown',e=>{if(e.key==='Enter')sendFriendReqByCode();});
+document.getElementById('fr-mycode-copy').onclick=()=>{try{navigator.clipboard.writeText(myFriendCode());}catch(e){}toast(LANG==='de'?'Code kopiert!':'Code copied!','ic-check');};
+document.getElementById('chal-accept').onclick=acceptChallenge;
+document.getElementById('chal-decline').onclick=declineChallenge;
 document.getElementById('code-create-btn').onclick=openCreateModes;
 document.getElementById('code-mode-back').onclick=()=>{document.getElementById('code-mode-view').style.display='none';document.getElementById('code-pick-view').style.display='';};
 document.getElementById('code-copy').onclick=()=>{const c=document.getElementById('code-display').textContent;if(c&&c.indexOf('\u00b7')<0){try{navigator.clipboard.writeText(c);}catch(e){}toast(LANG==='de'?'Code kopiert!':'Code copied!','ic-check');}};
