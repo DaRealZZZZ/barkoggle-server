@@ -235,6 +235,7 @@ io.on('connection', socket => {
     d = d || {}; const targetId = String(d.toId||''); const to = onlineInfo(targetId);
     if (!to) { socket.emit('challengeResult', { ok:false, reason:'offline' }); return; }
     const ts = io.sockets.sockets.get(to.sid); if (!ts || !ts.connected) { socket.emit('challengeResult', { ok:false, reason:'offline' }); return; }
+    if (ts.data && ts.data.room) { socket.emit('challengeResult', { ok:false, reason:'ingame' }); return; }
     socket.data.mode = (d.mode && String(d.mode)) || socket.data.mode || 'cam';
     const code = genCode(); codes[code] = socket.id; socket.data.code = code;
     ts.emit('challengeIn', { fromId: socket.data.devId, fromNick: socket.data.nick, fromCoat: socket.data.coat, mode: socket.data.mode, code });

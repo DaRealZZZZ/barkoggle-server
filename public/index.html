@@ -247,6 +247,7 @@ body{font-family:'Fredoka',sans-serif;color:var(--ink);background:#FFE0A8;overfl
 @keyframes tP{50%{transform:scale(1.13)}}
 .gt-ctrls{display:flex;gap:7px;}
 .gctrl{width:40px;height:40px;border-radius:12px;background:rgba(255,255,255,.95);border:2px solid var(--ink);display:flex;align-items:center;justify-content:center;font-size:19px;cursor:pointer;color:var(--ink);transition:.12s;}
+.gctrl.off{background:var(--ink);color:#fff;opacity:.85;}
 .gctrl:hover{transform:translateY(-2px);}.gctrl.rep:hover{color:var(--pink-d);}
 .chaos-banner{position:absolute;top:32%;left:50%;transform:translateX(-50%);z-index:25;background:var(--purple);color:#fff;font-family:'Lilita One',cursive;font-size:18px;padding:9px 26px;border-radius:24px;border:3px solid #fff;box-shadow:0 5px 0 rgba(0,0,0,.3);display:none;align-items:center;gap:8px;}
 .chaos-banner.show{display:flex;animation:chaosIn .5s cubic-bezier(.3,1.5,.5,1);}
@@ -612,6 +613,7 @@ button:focus-visible,.mode:focus-visible,.type:focus-visible{outline:3px solid v
       <div class="timer" id="timer">30</div>
       <div class="gt-ctrls">
         <button class="gctrl" id="g-sfx"><svg class="ic"><use href="#ic-vol"/></svg></button>
+        <button class="gctrl" id="g-mute" title="Gegner stumm"><svg class="ic"><use href="#ic-vol"/></svg></button>
         <button class="gctrl rep" id="g-rep" title="Melden"><svg class="ic"><use href="#ic-flag"/></svg></button>
         <button class="gctrl" id="g-leave" title="Aufgeben"><svg class="ic"><use href="#ic-logout"/></svg></button>
       </div>
@@ -973,10 +975,15 @@ function renderTicker(){const tk=document.getElementById('ticker');const items=[
 <script>
 /* ============ MATCH ============ */
 let oppName='???',oppCoat='gray',matchTimer=null;
-function ensureMic(cb){if(window._micGranted){cb();return;}
+function ensureMedia(wantCam,cb){
 if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){noMic();return;}
-navigator.mediaDevices.getUserMedia({audio:true}).then(s=>{try{s.getTracks().forEach(t=>t.stop());}catch(e){}window._micGranted=true;cb();}).catch(()=>noMic());}
-function startMatch(){ensureMic(_startMatch);}
+try{if(window._preStream)window._preStream.getTracks().forEach(t=>t.stop());}catch(e){}window._preStream=null;
+const ok=s=>{window._preStream=s;window._micGranted=true;cb();};
+const audioOnly=()=>navigator.mediaDevices.getUserMedia({audio:true}).then(ok).catch(()=>noMic());
+if(wantCam&&camOn){navigator.mediaDevices.getUserMedia({video:{width:{ideal:320},height:{ideal:240},facingMode:'user'},audio:true}).then(ok).catch(audioOnly);}
+else{audioOnly();}}
+function ensureMic(cb){ensureMedia(false,cb);}
+function startMatch(){ensureMedia(false,_startMatch);}
 function _startMatch(){selType=document.querySelector('.type.on').dataset.type;SFX.init();SFX.resume();SFX.beep();NET.live=false;
 setupMatchVisuals();go('match');
 if(NET.connected&&NET.find(selMode,selType)){document.getElementById('match-status').textContent=t('match.status');window._netFallback=setTimeout(botMatch,6500);}
@@ -1048,11 +1055,13 @@ b.classList.add('show');setTimeout(()=>b.classList.remove('show'),2200);}
 
 /* ---- MEDIA: friend rooms = WebRTC video/voice; else local mic only ---- */
 function initMedia(cfg){const hint=document.getElementById('mic-hint');
-window._micOK=false;
+window._micOK=false;window._oppMuted=false;
 if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){noMic(hint);return;}
 if(window._friendRoom){startRTC(cfg);return;}
 // random / bot: no transmission, just local mic for bark detection + own avatar
-navigator.mediaDevices.getUserMedia({audio:true}).then(s=>{micStream=s;setupAnalyser(s,hint);}).catch(()=>noMic(hint));
+let s=window._preStream;window._preStream=null;
+if(s){try{s.getVideoTracks().forEach(t=>t.stop());}catch(e){}micStream=s;setupAnalyser(s,hint);}
+else navigator.mediaDevices.getUserMedia({audio:true}).then(st=>{micStream=st;setupAnalyser(st,hint);}).catch(()=>noMic(hint));
 }
 function noMic(hint){
 window._aborted=true;running=false;
@@ -1065,10 +1074,12 @@ const M={de:['Mikrofon nötig','BarkOggle braucht dein Mikrofon zum Bellen. Erla
 const m=M[LANG]||M.en;
 document.getElementById('mic-title').textContent=m[0];document.getElementById('mic-body').textContent=m[1];document.getElementById('mic-retry').textContent=m[2];document.getElementById('mic-back').textContent=m[3];
 go('menu');document.getElementById('ov-mic').classList.add('open');}
-async function startRTC(cfg){const hint=document.getElementById('mic-hint');let wantVideo=cfg.cam&&camOn&&!cfg.hideOpp;
-let stream=null;
-if(wantVideo){try{stream=await navigator.mediaDevices.getUserMedia({video:{width:320,height:240},audio:true});}catch(e){wantVideo=false;}}
-if(!stream){try{stream=await navigator.mediaDevices.getUserMedia({audio:true});wantVideo=false;hint.textContent=LANG==='de'?'Kamera belegt \u2013 nur Ton aktiv.':'Camera busy \u2013 audio only.';}catch(e2){noMic(hint);return;}}
+async function startRTC(cfg){const hint=document.getElementById('mic-hint');
+let stream=window._preStream;window._preStream=null;
+if(!stream){try{stream=await navigator.mediaDevices.getUserMedia({video:(cfg.cam&&camOn&&!cfg.hideOpp)?{width:320,height:240}:false,audio:true});}catch(e){try{stream=await navigator.mediaDevices.getUserMedia({audio:true});}catch(e2){noMic(hint);return;}}}
+let hasVid=stream.getVideoTracks&&stream.getVideoTracks().length>0;
+let wantVideo=cfg.cam&&camOn&&!cfg.hideOpp&&hasVid;
+if(hasVid&&!wantVideo){try{stream.getVideoTracks().forEach(t=>t.stop());}catch(e){}hasVid=false;}
 localStream=stream;micStream=stream;
 if(wantVideo){const tile=document.getElementById('cam-you');const cd=tile.querySelector('.camdog');const v=document.createElement('video');v.autoplay=true;v.muted=true;v.playsInline=true;v.srcObject=stream;if(cd)cd.replaceWith(v);v.className='camvid';tile.insertBefore(v,tile.querySelector('.vig'));v.play().catch(()=>{});}
 setupAnalyser(stream,hint);
@@ -1081,9 +1092,18 @@ _pendingSignals.forEach(applySignal);_pendingSignals=[];
 }catch(e){}
 }
 function attachRemote(stream,video){
-if(video){const tile=document.getElementById('cam-opp');const cd=tile.querySelector('.camdog');const v=document.createElement('video');v.autoplay=true;v.playsInline=true;v.srcObject=stream;if(cd)cd.replaceWith(v);v.className='camvid-opp';tile.insertBefore(v,tile.querySelector('.vig'));v.play().catch(()=>{});}
-else{if(!remoteAudioEl){remoteAudioEl=document.createElement('audio');remoteAudioEl.autoplay=true;document.body.appendChild(remoteAudioEl);}remoteAudioEl.srcObject=stream;remoteAudioEl.play().catch(()=>{});}
+if(video){const tile=document.getElementById('cam-opp');const cd=tile.querySelector('.camdog');const v=document.createElement('video');v.autoplay=true;v.playsInline=true;v.srcObject=stream;v.muted=!!window._oppMuted;if(cd)cd.replaceWith(v);v.className='camvid-opp';tile.insertBefore(v,tile.querySelector('.vig'));v.play().catch(()=>{});}
+// always also route audio through a dedicated element so voice is heard even in camera mode
+if(!remoteAudioEl){remoteAudioEl=document.createElement('audio');remoteAudioEl.autoplay=true;remoteAudioEl.playsInline=true;document.body.appendChild(remoteAudioEl);}
+remoteAudioEl.srcObject=stream;remoteAudioEl.muted=!!window._oppMuted;remoteAudioEl.play().catch(()=>{window._audioBlocked=true;});
+applyOppMute();
 }
+window._oppMuted=false;window._audioBlocked=false;
+function applyOppMute(){const m=!!window._oppMuted;if(remoteAudioEl)remoteAudioEl.muted=m;const ov=document.querySelector('#cam-opp .camvid-opp');if(ov)ov.muted=m;}
+function toggleOppMute(){window._oppMuted=!window._oppMuted;applyOppMute();window._audioBlocked=false;
+try{if(remoteAudioEl&&!window._oppMuted)remoteAudioEl.play().catch(()=>{});const ov=document.querySelector('#cam-opp .camvid-opp');if(ov&&!window._oppMuted)ov.play().catch(()=>{});}catch(e){}
+const b=document.getElementById('g-mute');if(b)b.classList.toggle('off',window._oppMuted);
+toast(window._oppMuted?(LANG==='de'?'Gegner stummgeschaltet':'Rival muted'):(LANG==='de'?'Gegner hörbar':'Rival audible'),'ic-vol');}
 async function onSignal(d){if(!pc){_pendingSignals.push(d);return;}applySignal(d);}
 async function applySignal(d){try{
 if(d.type==='offer'){await pc.setRemoteDescription(d.sdp);const ans=await pc.createAnswer();await pc.setLocalDescription(ans);NET.signal({type:'answer',sdp:pc.localDescription});}
@@ -1092,21 +1112,28 @@ else if(d.type==='ice'){try{await pc.addIceCandidate(d.candidate);}catch(e){}}
 }catch(e){}}
 
 /* ---- real bark detection (onset + broadband + short, not steady speech) ---- */
-let _baseline=6,_lastBark=0,_inBurst=false,_prevRms=0,_burstStart=0;
+let _baseline=6,_lastBark=0,_inBurst=false,_above=0;
 function setupAnalyser(stream,hint){try{
 audioCtx=new (window.AudioContext||window.webkitAudioContext)();
 const src=audioCtx.createMediaStreamSource(stream);
 analyser=audioCtx.createAnalyser();analyser.fftSize=1024;analyser.smoothingTimeConstant=0.15;
 src.connect(analyser);
 freqData=new Uint8Array(analyser.frequencyBinCount);timeData=new Uint8Array(analyser.fftSize);
-window._micOK=true;_baseline=6;_inBurst=false;barkLoop();
+window._micOK=true;_baseline=6;_inBurst=false;_above=0;barkLoop();
 }catch(e){noMic(hint);}}
 function barkLoop(){if(!analyser){return;}
 analyser.getByteFrequencyData(freqData);
 let sum=0;for(let i=0;i<freqData.length;i++)sum+=freqData[i];const avg=sum/freqData.length;
+// voice/bark band ~280-2800 Hz (bins ~6..60 at 48kHz/1024)
+let vsum=0,vn=0;const hi=Math.min(60,freqData.length);for(let i=6;i<hi;i++){vsum+=freqData[i];vn++;}const vavg=vn?vsum/vn:0;
 const viz=document.getElementById('viz').children;for(let i=0;i<viz.length;i++){const v=freqData[Math.floor(i/viz.length*freqData.length)]/255;viz[i].style.height=Math.max(6,v*30)+'px';}
-const thr=8+sens*0.7;
-if(running){if(avg>thr&&!_inBurst){_inBurst=true;_lastBark=performance.now();myBark(true);}else if(avg<thr*0.6){_inBurst=false;}}
+const thr=14+sens*0.7;
+if(running){
+if(vavg>thr){_above++;}else{_above=0;}
+// real bark/voice: energy in the voice band, sustained >=2 frames (a click is a single broadband spike), and voice band must carry the energy (not a flat broadband transient)
+if(_above>=2&&!_inBurst&&vavg>=avg*0.85){_inBurst=true;_lastBark=performance.now();myBark(true);}
+else if(vavg<thr*0.5){_inBurst=false;}
+}
 micRAF=requestAnimationFrame(barkLoop);}
 function stopMedia(){if(micRAF)cancelAnimationFrame(micRAF);if(audioCtx){try{audioCtx.close();}catch(e){}audioCtx=null;}analyser=null;
 if(pc){try{pc.ontrack=null;pc.onicecandidate=null;pc.close();}catch(e){}pc=null;}
@@ -1139,7 +1166,7 @@ function openLegal(which){const NM={tos:{de:'AGB',en:'Terms',es:'T\u00e9rminos',
 
 /* ============ FRIENDS / CODE ROOMS ============ */
 function openCode(){const de=LANG==='de';document.getElementById('code-title').textContent=de?'Gegen Freunde':'Play a friend';document.getElementById('code-create-t').textContent=de?'Raum erstellen':'Create room';document.getElementById('code-join-t').textContent=de?'Raum beitreten':'Join room';document.getElementById('code-or').textContent=de?'ODER':'OR';document.getElementById('code-share-lbl').textContent=de?'Teile diesen Code mit deinem Freund:':'Share this code with your friend:';document.getElementById('code-copy-t').textContent=de?'Code kopieren':'Copy code';document.getElementById('code-share-t').textContent=de?'Code teilen':'Share code';document.getElementById('code-help').textContent=de?'Dein Freund tippt diesen Code im Men\u00fc bei \u201eBeitreten\u201c ein. Dann startet ihr im selben Modus.':'Your friend enters this code under \u201cJoin\u201d. You start in the same mode.';document.getElementById('code-camnote').textContent=de?'In Freundes-R\u00e4umen ist die Kamera erlaubt.':'Camera is allowed in friend rooms.';document.getElementById('code-input').value='';document.getElementById('code-pick-view').style.display='';document.getElementById('code-create-view').style.display='none';document.getElementById('code-mode-view').style.display='none';if(!NET.connected)toast(de?'Kein Server verbunden \u2013 nur online m\u00f6glich':'No server \u2013 online only','ic-flag');openOverlay('ov-code');}
-function doCreateRoom(){ensureMic(_doCreateRoom);}
+function doCreateRoom(){const m=window._friendMode||selMode;const wc=!!(MODES[m]&&MODES[m].cam);ensureMedia(wc,_doCreateRoom);}
 function _doCreateRoom(){if(!NET.connected){toast(LANG==='de'?'Kein Server verbunden':'No server connected','ic-flag');return;}if(NET.createRoom(window._friendMode||selMode)){armCodeTimeout();document.getElementById('code-pick-view').style.display='none';document.getElementById('code-mode-view').style.display='none';document.getElementById('code-create-view').style.display='';document.getElementById('code-display').textContent='\u00b7\u00b7\u00b7\u00b7\u00b7';document.getElementById('code-wait').textContent=LANG==='de'?'Warte auf Beitritt\u2026':'Waiting for a friend\u2026';}}
 function showRoomCode(code){clearTimeout(window._roomCodeT);const d=document.getElementById('code-display');if(d)d.textContent=code;const w=document.getElementById('code-wait');if(w)w.textContent=(LANG==='de'?'Warte auf Beitritt\u2026':'Waiting for a friend\u2026');}
 function openCreateModes(){const de=LANG==='de';document.getElementById('code-pick-view').style.display='none';document.getElementById('code-create-view').style.display='none';document.getElementById('code-mode-view').style.display='';
@@ -1149,7 +1176,7 @@ const g=document.getElementById('code-mode-grid');g.innerHTML='';
 Object.keys(MODES).forEach(m=>{const b=document.createElement('button');b.type='button';b.innerHTML=`<svg class="ic"><use href="#${EI[m]}"/></svg> ${t('mode.'+m)}`;b.onclick=()=>{window._friendMode=m;SFX.click();doCreateRoom();};g.appendChild(b);});}
 function armCodeTimeout(){clearTimeout(window._roomCodeT);window._roomCodeT=setTimeout(function(){const d=document.getElementById('code-display');if(d&&d.textContent.indexOf('\u00b7')>=0){const w=document.getElementById('code-wait');if(w)w.textContent=(LANG==='de'?'Server antwortet nicht \u2013 starte die NEUE Server-Version (npm install && npm start).':'Server not responding \u2013 deploy the latest server.');}},3000);}
 function onJoinFail(){toast(LANG==='de'?'Code nicht gefunden oder abgelaufen':'Code not found or expired','ic-flag');}
-function doJoinRoom(){ensureMic(_doJoinRoom);}
+function doJoinRoom(){ensureMedia(true,_doJoinRoom);}
 function _doJoinRoom(){const code=document.getElementById('code-input').value.toUpperCase().trim();if(code.length<4){toast(LANG==='de'?'Code eingeben':'Enter a code','ic-flag');return;}if(!NET.connected){toast(LANG==='de'?'Kein Server verbunden':'No server connected','ic-flag');return;}NET.joinRoom(code,selMode);}
 
 /* ============ FRIENDS SYSTEM ============ */
@@ -1209,7 +1236,7 @@ function sendFriendReqByCode(){const de=LANG==='de';const code=document.getEleme
 NET.sock.emit('friendReqByCode',{code});document.getElementById('fr-add-input').value='';toast(de?'Anfrage gesendet (wenn online)':'Request sent (if online)','ic-check');}
 
 function challengeFriend(id){const de=LANG==='de';if(!NET.connected){toast(de?'Nur online':'Online only','ic-flag');return;}
-ensureMic(()=>{NET.challenge(id,selMode);toast(de?'Herausforderung gesendet…':'Challenge sent…','ic-flag');});}
+ensureMedia(!!(MODES[selMode]&&MODES[selMode].cam),()=>{NET.challenge(id,selMode);toast(de?'Herausforderung gesendet…':'Challenge sent…','ic-flag');});}
 
 function acceptReq(rq){NET.friendAccept(rq.fromId);addFriendLocal({id:rq.fromId,nick:rq.fromNick,coat:rq.fromCoat,elo:rq.fromElo});_frReqs=_frReqs.filter(r=>r.fromId!==rq.fromId);renderReqs();renderFriends();toast(frL('Freund hinzugefügt!','Friend added!'),'ic-check');}
 
@@ -1219,7 +1246,7 @@ function onFriendReq(d){if(!_frReqs.some(r=>r.fromId===d.fromId))_frReqs.push(d)
 function onFriendReqResult(d){if(d&&!d.ok)toast(frL('Spieler offline/nicht gefunden','Player offline/not found'),'ic-flag');}
 function onFriendAdded(d){addFriendLocal(d);if(document.getElementById('ov-friends').classList.contains('open'))renderFriends();}
 function onChallengeIn(d){_frChalQueue.push(d);if(!document.getElementById('ov-chal').classList.contains('open'))showNextChallenge();}
-function onChallengeResult(d){if(d&&!d.ok)toast(frL('Freund offline','Friend offline'),'ic-flag');else if(d&&d.ok)toast(frL('Warte auf Annahme…','Waiting for accept…'),'ic-flag');}
+function onChallengeResult(d){if(d&&!d.ok){if(d.reason==='ingame')toast(frL('Spieler ist gerade im Spiel','Player is in a game right now'),'ic-flag');else toast(frL('Freund offline','Friend offline'),'ic-flag');}else if(d&&d.ok)toast(frL('Warte auf Annahme…','Waiting for accept…'),'ic-flag');}
 function onChallengeDeclined(d){toast(frL((d&&d.byNick||'Freund')+' hat abgelehnt','Challenge declined'),'ic-flag');}
 
 function showNextChallenge(){const d=_frChalQueue.shift();if(!d)return;window._chalFrom=d;const de=LANG==='de';
@@ -1231,7 +1258,7 @@ document.getElementById('chal-accept-t').textContent=de?'Annehmen':'Accept';
 document.getElementById('chal-decline-t').textContent=de?'Ablehnen':'Decline';
 openOverlay('ov-chal');SFX.beep&&SFX.beep();}
 
-function acceptChallenge(){const d=window._chalFrom;if(!d)return;closeOverlay('ov-chal');selMode=MODES[d.mode]?d.mode:selMode;ensureMic(()=>{NET.joinRoom(d.code,selMode);});}
+function acceptChallenge(){const d=window._chalFrom;if(!d)return;closeOverlay('ov-chal');selMode=MODES[d.mode]?d.mode:selMode;ensureMedia(!!(MODES[selMode]&&MODES[selMode].cam),()=>{NET.joinRoom(d.code,selMode);});}
 function declineChallenge(){const d=window._chalFrom;if(d)NET.challengeDecline(d.fromId);closeOverlay('ov-chal');setTimeout(showNextChallenge,300);}
 
 function onJoinFailX(){}
@@ -1401,6 +1428,7 @@ document.getElementById('code-join-btn').onclick=doJoinRoom;
 document.getElementById('code-input').addEventListener('keydown',e=>{if(e.key==='Enter')doJoinRoom();});
 document.getElementById('sfx-btn').onclick=function(){toggleSfx(this);};
 document.getElementById('g-sfx').onclick=function(){toggleSfx(this);};
+document.getElementById('g-mute').onclick=toggleOppMute;
 document.getElementById('g-rep').onclick=()=>{buildReasons();openOverlay('ov-rep');};
 document.getElementById('g-leave').onclick=surrender;
 document.querySelectorAll('.type').forEach(b=>b.onclick=()=>{document.querySelectorAll('.type').forEach(x=>x.classList.remove('on'));b.classList.add('on');SFX.click();});
